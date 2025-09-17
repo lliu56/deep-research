@@ -31,8 +31,14 @@ const customModel = process.env.CUSTOM_MODEL
 
 // Models
 
-const o3MiniModel = openai?.('o3-mini', {
-  reasoningEffort: 'medium',
+// GPT-5 model variants based on environment configuration
+const gpt5ModelVariant = process.env.GPT5_MODEL_VARIANT || 'gpt-5-mini';
+const gpt5ReasoningEffort = process.env.GPT5_REASONING_EFFORT || 'medium';
+const gpt5Verbosity = process.env.GPT5_VERBOSITY || 'medium';
+
+const gpt5Model = openai?.(gpt5ModelVariant, {
+  reasoning: { effort: gpt5ReasoningEffort },
+  text: { verbosity: gpt5Verbosity },
   structuredOutputs: true,
 });
 
@@ -50,7 +56,7 @@ export function getModel(): LanguageModelV1 {
     return customModel;
   }
 
-  const model = deepSeekR1Model ?? o3MiniModel;
+  const model = deepSeekR1Model ?? gpt5Model;
   if (!model) {
     throw new Error('No model found');
   }
