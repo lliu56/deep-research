@@ -39,8 +39,8 @@ export function initializePool(): Pool {
   });
 
   // Handle pool errors
-  pool.on('error', (err) => {
-    console.error('Unexpected error on idle client', err);
+  pool.on('error', err => {
+    console.error('[Database][Error] Unexpected error on idle client', err);
   });
 
   return pool;
@@ -54,9 +54,9 @@ export async function testConnection(): Promise<void> {
     const client = await currentPool.connect();
     await client.query('SELECT NOW()');
     client.release();
-    console.log('Database connection test successful');
+    console.log('[Database] Database connection test successful');
   } catch (error) {
-    console.error('Database connection test failed:', error);
+    console.error('[Database][Error] Database connection test failed:', error);
     throw error;
   }
 }
@@ -66,7 +66,7 @@ export async function closePool(): Promise<void> {
   if (pool) {
     await pool.end();
     pool = null;
-    console.log('Database connection pool closed');
+    console.log('[Database] Database connection pool closed');
   }
 }
 
@@ -106,7 +106,7 @@ async function withRetry<T>(
       return await operation();
     } catch (error) {
       lastError = error as Error;
-      console.warn(`Attempt ${attempt} failed:`, error);
+      console.warn(`[Database][Retry] Attempt ${attempt} failed:`, error);
 
       if (attempt === maxRetries) {
         break;
@@ -114,7 +114,7 @@ async function withRetry<T>(
 
       // Exponential backoff: 1s, 2s, 4s
       const delay = Math.pow(2, attempt - 1) * 1000;
-      await new Promise((resolve) => setTimeout(resolve, delay));
+      await new Promise(resolve => setTimeout(resolve, delay));
     }
   }
 
@@ -196,7 +196,7 @@ async function insertSingleContact(
 
     return { action: wasInserted ? 'inserted' : 'updated' };
   } catch (error) {
-    console.error('Error inserting contact:', error);
+    console.error('[Database][Contact] Error inserting contact:', error);
     return {
       action: 'rejected',
       error: `Database error: ${(error as Error).message}`,
@@ -234,12 +234,12 @@ export async function insertContacts(
         }
 
         console.log(
-          `Processing ${contacts.length} contacts in ${batches.length} batches`,
+          `[Database] Processing ${contacts.length} contacts in ${batches.length} batches`,
         );
 
         for (const [batchIndex, batch] of batches.entries()) {
           console.log(
-            `Processing batch ${batchIndex + 1}/${batches.length} (${batch.length} contacts)`,
+            `[Database] Processing batch ${batchIndex + 1}/${batches.length} (${batch.length} contacts)`,
           );
 
           // Begin transaction for each batch
@@ -281,17 +281,17 @@ export async function insertContacts(
     });
 
     console.log(
-      `Database insertion completed: ${result.inserted} inserted, ${result.updated} updated, ${result.rejected} rejected`,
+      `[Database] Database insertion completed: ${result.inserted} inserted, ${result.updated} updated, ${result.rejected} rejected`,
     );
 
     if (result.errors.length > 0) {
-      console.warn('Insertion errors:', result.errors);
+      console.warn('[Database][Warn] Insertion errors:', result.errors);
     }
 
     return result;
   } catch (error) {
     const errorMessage = `Database operation failed: ${(error as Error).message}`;
-    console.error(errorMessage);
+    console.error(`[Database][Error] ${errorMessage}`);
 
     result.errors.push(errorMessage);
     return result;

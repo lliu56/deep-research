@@ -1,6 +1,5 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
-
 import FirecrawlApp, { SearchResponse } from '@mendable/firecrawl-js';
 import { generateObject } from 'ai';
 import { compact } from 'lodash-es';
@@ -80,7 +79,7 @@ async function generateSerpQueries({
         .describe(`List of SERP queries, max of ${numQueries}`),
     }),
   });
-  log(`Created ${res.object.queries.length} queries`, res.object.queries);
+  log(`[Research] Created ${res.object.queries.length} queries`, res.object.queries);
 
   return res.object.queries.slice(0, numQueries);
 }
@@ -101,7 +100,7 @@ async function processSerpResult({
   const contents = compact(result.data.map(item => item.markdown)).map(
     content => trimPrompt(content, 25_000),
   );
-  log(`Ran ${query}, found ${contents.length} contents`);
+  log(`[Research][SERP] Ran ${query}, found ${contents.length} contents`);
 
   const res = await generateObject({
     model: getModel(modelConfig),
@@ -123,7 +122,10 @@ async function processSerpResult({
         ),
     }),
   });
-  log(`Created ${res.object.learnings.length} learnings`, res.object.learnings);
+  log(
+    `[Research] Created ${res.object.learnings.length} learnings`,
+    res.object.learnings,
+  );
 
   return res.object;
 }
@@ -139,15 +141,15 @@ export async function generateContactsFromLearnings({
   modelConfig?: ModelConfig;
 }): Promise<Contact[]> {
   // Check for bypass mode
-  if (process.env.BY_PASS_DEEP_RESEARCH === 'true') {
-    log('\nUsing mock contacts from test/mock-output.json\n');
-    
+  if (process.env.BYPASS_DEEP_RESEARCH === 'true') {
+    log('\n[Contacts][Bypass] Using mock contacts from test/mock-output.json\n');
+
     try {
       const mockDataPath = path.join(process.cwd(), 'test', 'mock-output.json');
       const mockData = await fs.readFile(mockDataPath, 'utf-8');
       return JSON.parse(mockData) as Contact[];
     } catch (error) {
-      log('Warning: Could not load mock data, returning sample contacts');
+      log('[Contacts][Bypass] Warning: Could not load mock data, returning sample contacts');
       // Return sample contacts if mock file not found
       return [
         {
@@ -241,7 +243,7 @@ ${learningsString}
     }),
   });
 
-  log(`Extracted ${res.object.contacts.length} contacts from learnings`);
+  log(`[Contacts] Extracted ${res.object.contacts.length} contacts from learnings`);
   return res.object.contacts as Contact[];
 }
 
@@ -327,9 +329,9 @@ export async function deepResearch({
   modelConfig?: ModelConfig;
 }): Promise<ResearchResult> {
   // Check for bypass mode
-  if (process.env.BY_PASS_DEEP_RESEARCH === 'true') {
-    log('\n=== BYPASS MODE ENABLED - Using mock data ===\n');
-    
+  if (process.env.BYPASS_DEEP_RESEARCH === 'true') {
+    log('\n[Research][Bypass] Using mock learnings and URLs\n');
+
     // Return mock learnings and URLs
     return {
       learnings: [
@@ -399,7 +401,7 @@ export async function deepResearch({
 
           if (newDepth > 0) {
             log(
-              `Researching deeper, breadth: ${newBreadth}, depth: ${newDepth}`,
+              `[Research] Researching deeper, breadth: ${newBreadth}, depth: ${newDepth}`,
             );
 
             reportProgress({
@@ -436,9 +438,9 @@ export async function deepResearch({
           }
         } catch (e: any) {
           if (e.message && e.message.includes('Timeout')) {
-            log(`Timeout error running query: ${serpQuery.query}: `, e);
+            log(`[Research][Error] Timeout running query: ${serpQuery.query}: `, e);
           } else {
-            log(`Error running query: ${serpQuery.query}: `, e);
+            log(`[Research][Error] Failed running query: ${serpQuery.query}: `, e);
           }
           return {
             learnings: [],

@@ -1,0 +1,16 @@
+[
+  {
+    "email": "test1@test.com",
+    "field": "position",
+    "before": "Director",
+    "after": "Head of Technology",
+    "reason": "Mock verification found updated title"
+  },
+  {
+    "email": "test2@test.com",
+    "field": "department",
+    "before": "IT",
+    "after": "Computer Science",
+    "reason": "Mock audit found more specific department"
+  }
+]

@@ -32,7 +32,7 @@ async function verifyContact({
   verificationDepth: number;
   modelConfig?: ModelConfig;
 }): Promise<{ verifiedContact: Contact; corrections: Correction[] }> {
-  log(`Verifying contact: ${contact.name} at ${contact.company}`);
+  log(`[Audit] Verifying contact: ${contact.name} at ${contact.company}`);
 
   // Create a targeted search query for this specific contact
   const verificationQuery = `
@@ -69,7 +69,7 @@ Context: ${originalQuery}
       ) || verifiedContacts[0];
 
     if (!verifiedContact) {
-      log(`Could not verify contact: ${contact.name}`);
+      log(`[Audit] Could not verify contact: ${contact.name}`);
       return { verifiedContact: contact, corrections: [] };
     }
 
@@ -111,10 +111,10 @@ Context: ${originalQuery}
       email: verifiedContact.email || contact.email,
     };
 
-    log(`Verified ${contact.name}: ${corrections.length} corrections found`);
+    log(`[Audit] Verified ${contact.name}: ${corrections.length} corrections found`);
     return { verifiedContact: finalContact, corrections };
   } catch (error) {
-    log(`Error verifying contact ${contact.name}:`, error);
+    log(`[Audit][Error] Error verifying contact ${contact.name}:`, error);
     return { verifiedContact: contact, corrections: [] };
   }
 }
@@ -132,18 +132,48 @@ export async function auditContacts({
   modelConfig?: ModelConfig;
 }): Promise<{ verifiedContacts: Contact[]; corrections: Correction[] }> {
   if (contacts.length === 0) {
-    log('No contacts to audit');
+    log('[Audit] No contacts to audit');
     return { verifiedContacts: [], corrections: [] };
   }
 
-  log(`Starting audit process for ${contacts.length} contacts`);
+  // Check for bypass mode and generate mock corrections
+  if (process.env.BYPASS_DEEP_RESEARCH === 'true') {
+    log('[Audit][Bypass] Generating mock audit corrections');
+
+    const mockCorrections: Correction[] = [
+      {
+        email: contacts[0]?.email || 'test@example.com',
+        field: 'position',
+        before: 'Director',
+        after: 'Head of Technology',
+        reason: 'Mock verification found updated title',
+      },
+      {
+        email: contacts[1]?.email || 'test2@example.com',
+        field: 'department',
+        before: 'IT',
+        after: 'Computer Science',
+        reason: 'Mock audit found more specific department',
+      },
+    ];
+
+    log(
+      `[Audit][Bypass] Mock audit completed: ${mockCorrections.length} mock corrections generated`,
+    );
+    return {
+      verifiedContacts: contacts,
+      corrections: mockCorrections,
+    };
+  }
+
+  log(`[Audit] Starting audit process for ${contacts.length} contacts`);
   log(
-    `Sample size: ${criteria.sampleSize}, Verification depth: ${criteria.verificationDepth}`,
+    `[Audit] Sample size: ${criteria.sampleSize}, Verification depth: ${criteria.verificationDepth}`,
   );
 
   // Get random sample of contacts to verify
   const sampleContacts = getRandomSample(contacts, criteria.sampleSize);
-  log(`Selected ${sampleContacts.length} contacts for verification`);
+  log(`[Audit] Selected ${sampleContacts.length} contacts for verification`);
 
   const allCorrections: Correction[] = [];
   const verifiedContactsMap = new Map<string, Contact>();
@@ -167,13 +197,13 @@ export async function auditContacts({
       verifiedContactsMap.set(contact.email, verifiedContact);
       allCorrections.push(...corrections);
     } catch (error) {
-      log(`Failed to verify contact ${contact.name}:`, error);
+      log(`[Audit][Error] Failed to verify contact ${contact.name}:`, error);
     }
   }
 
   const verifiedContacts = Array.from(verifiedContactsMap.values());
 
-  log(`Audit completed: ${allCorrections.length} total corrections made`);
+  log(`[Audit] Audit completed: ${allCorrections.length} total corrections made`);
 
   return {
     verifiedContacts,
@@ -224,9 +254,9 @@ Corrections by field: ${JSON.stringify(correctionsByField, null, 2)}
 
 Recent corrections examples:
 ${corrections
-        .slice(0, 5)
-        .map(c => `- ${c.field}: "${c.before}" → "${c.after}" (${c.reason})`)
-        .join('\n')}
+  .slice(0, 5)
+  .map(c => `- ${c.field}: "${c.before}" → "${c.after}" (${c.reason})`)
+  .join('\n')}
 
 Create a brief summary highlighting data quality, main issues found, and confidence level.`,
     schema: z.object({

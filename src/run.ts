@@ -14,6 +14,7 @@ import {
   writeFinalAnswer,
   writeFinalReport,
 } from './deep-research';
+import { generateAndSendReport } from './email-report';
 import { generateFeedback } from './feedback';
 import { ResearchInput } from './types';
 
@@ -48,18 +49,20 @@ async function loadResearchInput(): Promise<ResearchInput> {
 async function run() {
   // Initialize database connection pool
   initializePool();
+  log('[Init] Connection pool initialized');
 
   // Test database connectivity
   try {
     await testConnection();
   } catch (error) {
-    console.error('Failed to connect to database:', error);
-    console.log('Continuing without database integration...');
+    console.error('[Init][Error] Failed to connect to database:', error);
+    console.log('[Init] Continuing without database integration...');
     // Continue without database, will fall back to JSON file
   }
 
   // Load configuration from RESEARCH_INPUT.json
   const config = await loadResearchInput();
+  log('[Config] Loaded RESEARCH_INPUT.json');
 
   if (!config.query) {
     console.error('Error: No query specified in RESEARCH_INPUT.json');
@@ -67,9 +70,10 @@ async function run() {
     process.exit(1);
   }
 
-  console.log('Using model: ', getModel(config.modelConfig).modelId);
-  console.log('Configuration loaded from RESEARCH_INPUT.json');
-  console.log('Query:', config.query);
+  console.log('[Config] Using model:', getModel(config.modelConfig).modelId);
+  console.log('[Config] Configuration loaded from RESEARCH_INPUT.json');
+  console.log('[Config] Query:', config.query);
+  console.log('[Config] BYPASS_DEEP_RESEARCH:', process.env.BYPASS_DEEP_RESEARCH);
 
   const breadth = config.breadth || 4;
   const depth = config.depth || 2;
@@ -78,7 +82,7 @@ async function run() {
   let combinedQuery = config.query;
 
   if (isReport) {
-    log(`Creating research plan...`);
+    log(`[Planning] Creating research plan...`);
 
     // Generate follow-up questions (automated - no user input)
     const followUpQuestions = await generateFeedback({
@@ -86,7 +90,7 @@ async function run() {
       modelConfig: config.modelConfig,
     });
 
-    log('\nGenerated follow-up questions for enhanced research context:');
+    log('\n[Planning] Generated follow-up questions for enhanced research context:');
     followUpQuestions.forEach((q: string, i: number) => {
       log(`${i + 1}. ${q}`);
     });
@@ -102,7 +106,7 @@ Output Format: ${config.outputFormat || 'contacts_db'}
 `;
   }
 
-  log('\nStarting automated research pipeline...\n');
+  log('\n[Research] Starting automated research pipeline...\n');
 
   const { learnings, visitedUrls } = await deepResearch({
     query: combinedQuery,
@@ -111,15 +115,15 @@ Output Format: ${config.outputFormat || 'contacts_db'}
     modelConfig: config.modelConfig,
   });
 
-  log(`\n\nLearnings:\n\n${learnings.join('\n')}`);
-  log(`\n\nVisited URLs (${visitedUrls.length}):\n\n${visitedUrls.join('\n')}`);
+  log(`\n\n[Research] Learnings:\n\n${learnings.join('\n')}`);
+  log(`\n\n[Research] Visited URLs (${visitedUrls.length}):\n\n${visitedUrls.join('\n')}`);
 
   // Generate contacts if outputFormat is contacts_db
   let contacts: any[] = [];
   let auditSummary = '';
 
   if (config.outputFormat === 'contacts_db') {
-    log('\nExtracting contacts from research learnings...');
+    log('\n[Contacts] Extracting contacts from research learnings...');
 
     contacts = await generateContactsFromLearnings({
       learnings,
@@ -127,11 +131,11 @@ Output Format: ${config.outputFormat || 'contacts_db'}
       modelConfig: config.modelConfig,
     });
 
-    log(`\nExtracted ${contacts.length} contacts`);
+    log(`\n[Contacts] Extracted ${contacts.length} contacts`);
 
     // Perform auditing if criteria is provided
     if (config.auditingCriteria && contacts.length > 0) {
-      log('\nStarting auditing process...');
+      log('\n[Audit] Starting auditing process...');
 
       const { verifiedContacts, corrections } = await auditContacts({
         contacts,
@@ -150,21 +154,61 @@ Output Format: ${config.outputFormat || 'contacts_db'}
         modelConfig: config.modelConfig,
       });
 
-      log(`\nAuditing completed: ${corrections.length} corrections made`);
+      log(`\n[Audit] Auditing completed: ${corrections.length} corrections made`);
 
       // Insert contacts into database
+      let dbResult;
       try {
-        const dbResult = await insertContacts(contacts);
+        dbResult = await insertContacts(contacts);
         log(
-          `\nDatabase insertion: ${dbResult.inserted} inserted, ${dbResult.updated} updated, ${dbResult.rejected} rejected`,
+          `\n[Database] Database insertion: ${dbResult.inserted} inserted, ${dbResult.updated} updated, ${dbResult.rejected} rejected`,
         );
 
         if (dbResult.errors.length > 0) {
-          console.warn('Some contacts could not be inserted:', dbResult.errors);
+          console.warn('[Database][Warn] Some contacts could not be inserted:', dbResult.errors);
+        }
+
+        // Send email report after successful database insertion
+        log('\n[Email] Generating and sending email report...');
+        const emailResult = await generateAndSendReport({
+          query: config.query,
+          contacts,
+          corrections,
+          insertionResult: dbResult,
+          auditSummary,
+        });
+
+        if (emailResult.success) {
+          log('[Email] Email report sent successfully');
+        } else {
+          console.warn('[Email][Error] Failed to send email report:', emailResult.error);
         }
       } catch (dbError) {
-        console.error('Database insertion failed:', dbError);
-        console.log('Falling back to JSON file save...');
+        console.error('[Database][Error] Database insertion failed:', dbError);
+        console.log('[Database] Falling back to JSON file save...');
+
+        // Still try to send email report even if DB insertion failed
+        if (contacts.length > 0) {
+          log('\n[Email] Attempting to send email report despite DB failure...');
+          const emailResult = await generateAndSendReport({
+            query: config.query,
+            contacts,
+            corrections,
+            insertionResult: {
+              inserted: 0,
+              updated: 0,
+              rejected: contacts.length,
+              errors: ['Database insertion failed'],
+            },
+            auditSummary,
+          });
+
+          if (emailResult.success) {
+            log('[Email] Email report sent successfully despite DB failure');
+          } else {
+            console.warn('[Email][Error] Failed to send email report:', emailResult.error);
+          }
+        }
       }
 
       // Always save contacts to JSON file as backup
@@ -173,7 +217,7 @@ Output Format: ${config.outputFormat || 'contacts_db'}
         JSON.stringify(contacts, null, 2),
         'utf-8',
       );
-      log('\nContacts have been saved to contacts.json (backup)');
+      log('\n[Output] Contacts have been saved to contacts.json (backup)');
 
       // Save corrections log
       if (corrections.length > 0) {
@@ -182,12 +226,12 @@ Output Format: ${config.outputFormat || 'contacts_db'}
           JSON.stringify(corrections, null, 2),
           'utf-8',
         );
-        log('Corrections log saved to corrections.json');
+        log('[Output] Corrections log saved to corrections.json');
       }
     }
   }
 
-  log('\nWriting final output...');
+  log('\n[Output] Writing final output...');
 
   if (isReport) {
     const report = await writeFinalReport({
@@ -210,7 +254,7 @@ Output Format: ${config.outputFormat || 'contacts_db'}
     }
 
     await fs.writeFile('report.md', finalReport, 'utf-8');
-    console.log('\nReport has been saved to report.md');
+    console.log('\n[Output] Report has been saved to report.md');
   } else {
     const answer = await writeFinalAnswer({
       prompt: combinedQuery,
@@ -219,16 +263,16 @@ Output Format: ${config.outputFormat || 'contacts_db'}
     });
 
     await fs.writeFile('answer.md', answer, 'utf-8');
-    console.log('\nAnswer has been saved to answer.md');
+    console.log('\n[Output] Answer has been saved to answer.md');
   }
 
-  console.log('\nAutomated research pipeline completed successfully.');
+  console.log('\n[Cleanup] Automated research pipeline completed successfully.');
 
   // Close database connection pool
   await closePool();
 }
 
-run().catch((error) => {
+run().catch(error => {
   console.error(error);
   // Ensure database connections are closed on error
   closePool().finally(() => process.exit(1));
