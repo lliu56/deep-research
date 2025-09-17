@@ -1,120 +1,235 @@
 import * as fs from 'fs/promises';
-import * as readline from 'readline';
 
 import { getModel } from './ai/providers';
+import { auditContacts, generateAuditSummary } from './auditing';
+import {
+  closePool,
+  initializePool,
+  insertContacts,
+  testConnection,
+} from './database';
 import {
   deepResearch,
+  generateContactsFromLearnings,
   writeFinalAnswer,
   writeFinalReport,
 } from './deep-research';
 import { generateFeedback } from './feedback';
+import { ResearchInput } from './types';
 
 // Helper function for consistent logging
 function log(...args: any[]) {
   console.log(...args);
 }
 
-const rl = readline.createInterface({
-  input: process.stdin,
-  output: process.stdout,
-});
-
-// Helper function to get user input
-function askQuestion(query: string): Promise<string> {
-  return new Promise(resolve => {
-    rl.question(query, answer => {
-      resolve(answer);
-    });
-  });
+// Load research input configuration from JSON file
+async function loadResearchInput(): Promise<ResearchInput> {
+  try {
+    const data = await fs.readFile('RESEARCH_INPUT.json', 'utf-8');
+    return JSON.parse(data) as ResearchInput;
+  } catch (error) {
+    console.error('Error loading RESEARCH_INPUT.json:', error);
+    console.log('Using default configuration...');
+    return {
+      query: '',
+      depth: 2,
+      breadth: 4,
+      outputFormat: 'contacts_db',
+      modelConfig: {
+        variant: 'gpt-5-mini',
+        reasoning: { effort: 'medium' },
+        text: { verbosity: 'medium' },
+      },
+    };
+  }
 }
 
 // run the agent
 async function run() {
-  console.log('Using model: ', getModel().modelId);
+  // Initialize database connection pool
+  initializePool();
 
-  // Get initial query
-  const initialQuery = await askQuestion('What would you like to research? ');
+  // Test database connectivity
+  try {
+    await testConnection();
+  } catch (error) {
+    console.error('Failed to connect to database:', error);
+    console.log('Continuing without database integration...');
+    // Continue without database, will fall back to JSON file
+  }
 
-  // Get breath and depth parameters
-  const breadth =
-    parseInt(
-      await askQuestion(
-        'Enter research breadth (recommended 2-10, default 4): ',
-      ),
-      10,
-    ) || 4;
-  const depth =
-    parseInt(
-      await askQuestion('Enter research depth (recommended 1-5, default 2): '),
-      10,
-    ) || 2;
-  const isReport =
-    (await askQuestion(
-      'Do you want to generate a long report or a specific answer? (report/answer, default report): ',
-    )) !== 'answer';
+  // Load configuration from RESEARCH_INPUT.json
+  const config = await loadResearchInput();
 
-  let combinedQuery = initialQuery;
+  if (!config.query) {
+    console.error('Error: No query specified in RESEARCH_INPUT.json');
+    await closePool(); // Clean up database connection
+    process.exit(1);
+  }
+
+  console.log('Using model: ', getModel(config.modelConfig).modelId);
+  console.log('Configuration loaded from RESEARCH_INPUT.json');
+  console.log('Query:', config.query);
+
+  const breadth = config.breadth || 4;
+  const depth = config.depth || 2;
+  const isReport = config.outputFormat !== 'answer';
+
+  let combinedQuery = config.query;
+
   if (isReport) {
     log(`Creating research plan...`);
 
-    // Generate follow-up questions
+    // Generate follow-up questions (automated - no user input)
     const followUpQuestions = await generateFeedback({
-      query: initialQuery,
+      query: config.query,
+      modelConfig: config.modelConfig,
     });
 
-    log(
-      '\nTo better understand your research needs, please answer these follow-up questions:',
-    );
+    log('\nGenerated follow-up questions for enhanced research context:');
+    followUpQuestions.forEach((q: string, i: number) => {
+      log(`${i + 1}. ${q}`);
+    });
 
-    // Collect answers to follow-up questions
-    const answers: string[] = [];
-    for (const question of followUpQuestions) {
-      const answer = await askQuestion(`\n${question}\nYour answer: `);
-      answers.push(answer);
-    }
-
-    // Combine all information for deep research
+    // For automated mode, we'll enhance the query with research context
     combinedQuery = `
-Initial Query: ${initialQuery}
-Follow-up Questions and Answers:
-${followUpQuestions.map((q: string, i: number) => `Q: ${q}\nA: ${answers[i]}`).join('\n')}
+Initial Query: ${config.query}
+Research Context: Conduct comprehensive research addressing these key areas:
+${followUpQuestions.map((q: string, i: number) => `${i + 1}. ${q}`).join('\n')}
+
+Focus Areas: ${config.contactHierarchy?.join(', ') || 'General research'}
+Output Format: ${config.outputFormat || 'contacts_db'}
 `;
   }
 
-  log('\nStarting research...\n');
+  log('\nStarting automated research pipeline...\n');
 
   const { learnings, visitedUrls } = await deepResearch({
     query: combinedQuery,
     breadth,
     depth,
+    modelConfig: config.modelConfig,
   });
 
   log(`\n\nLearnings:\n\n${learnings.join('\n')}`);
   log(`\n\nVisited URLs (${visitedUrls.length}):\n\n${visitedUrls.join('\n')}`);
-  log('Writing final report...');
+
+  // Generate contacts if outputFormat is contacts_db
+  let contacts: any[] = [];
+  let auditSummary = '';
+
+  if (config.outputFormat === 'contacts_db') {
+    log('\nExtracting contacts from research learnings...');
+
+    contacts = await generateContactsFromLearnings({
+      learnings,
+      contactHierarchy: config.contactHierarchy,
+      modelConfig: config.modelConfig,
+    });
+
+    log(`\nExtracted ${contacts.length} contacts`);
+
+    // Perform auditing if criteria is provided
+    if (config.auditingCriteria && contacts.length > 0) {
+      log('\nStarting auditing process...');
+
+      const { verifiedContacts, corrections } = await auditContacts({
+        contacts,
+        criteria: config.auditingCriteria,
+        originalQuery: config.query,
+        modelConfig: config.modelConfig,
+      });
+
+      contacts = verifiedContacts;
+
+      // Generate audit summary
+      auditSummary = await generateAuditSummary({
+        corrections,
+        totalContacts: contacts.length,
+        sampleSize: config.auditingCriteria.sampleSize,
+        modelConfig: config.modelConfig,
+      });
+
+      log(`\nAuditing completed: ${corrections.length} corrections made`);
+
+      // Insert contacts into database
+      try {
+        const dbResult = await insertContacts(contacts);
+        log(
+          `\nDatabase insertion: ${dbResult.inserted} inserted, ${dbResult.updated} updated, ${dbResult.rejected} rejected`,
+        );
+
+        if (dbResult.errors.length > 0) {
+          console.warn('Some contacts could not be inserted:', dbResult.errors);
+        }
+      } catch (dbError) {
+        console.error('Database insertion failed:', dbError);
+        console.log('Falling back to JSON file save...');
+      }
+
+      // Always save contacts to JSON file as backup
+      await fs.writeFile(
+        'contacts.json',
+        JSON.stringify(contacts, null, 2),
+        'utf-8',
+      );
+      log('\nContacts have been saved to contacts.json (backup)');
+
+      // Save corrections log
+      if (corrections.length > 0) {
+        await fs.writeFile(
+          'corrections.json',
+          JSON.stringify(corrections, null, 2),
+          'utf-8',
+        );
+        log('Corrections log saved to corrections.json');
+      }
+    }
+  }
+
+  log('\nWriting final output...');
 
   if (isReport) {
     const report = await writeFinalReport({
       prompt: combinedQuery,
       learnings,
       visitedUrls,
+      modelConfig: config.modelConfig,
     });
 
-    await fs.writeFile('report.md', report, 'utf-8');
-    console.log(`\n\nFinal Report:\n\n${report}`);
+    // Append contacts and audit summary to report if available
+    let finalReport = report;
+    if (config.outputFormat === 'contacts_db' && contacts.length > 0) {
+      finalReport += `\n\n## Extracted Contacts\n\nFound ${contacts.length} contacts from research.\n\n`;
+
+      if (auditSummary) {
+        finalReport += auditSummary + '\n\n';
+      }
+
+      finalReport += `Contact details saved to contacts.json\n`;
+    }
+
+    await fs.writeFile('report.md', finalReport, 'utf-8');
     console.log('\nReport has been saved to report.md');
   } else {
     const answer = await writeFinalAnswer({
       prompt: combinedQuery,
       learnings,
+      modelConfig: config.modelConfig,
     });
 
     await fs.writeFile('answer.md', answer, 'utf-8');
-    console.log(`\n\nFinal Answer:\n\n${answer}`);
     console.log('\nAnswer has been saved to answer.md');
   }
 
-  rl.close();
+  console.log('\nAutomated research pipeline completed successfully.');
+
+  // Close database connection pool
+  await closePool();
 }
 
-run().catch(console.error);
+run().catch((error) => {
+  console.error(error);
+  // Ensure database connections are closed on error
+  closePool().finally(() => process.exit(1));
+});

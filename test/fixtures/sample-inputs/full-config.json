@@ -1,0 +1,20 @@
+{
+  "query": "San Francisco tech CEOs hiring AI talent",
+  "depth": 2,
+  "breadth": 3,
+  "outputFormat": "contacts_db",
+  "contactHierarchy": ["CEO", "CTO", "VP"],
+  "modelConfig": {
+    "variant": "gpt-5-mini",
+    "reasoning": {
+      "effort": "medium"
+    },
+    "text": {
+      "verbosity": "medium"
+    }
+  },
+  "auditingCriteria": {
+    "sampleSize": 2,
+    "verificationDepth": 1
+  }
+}

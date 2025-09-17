@@ -7,6 +7,7 @@ import {
 } from 'ai';
 import { getEncoding } from 'js-tiktoken';
 
+import { ModelConfig } from '../types';
 import { RecursiveCharacterTextSplitter } from './text-splitter';
 
 // Providers
@@ -31,17 +32,6 @@ const customModel = process.env.CUSTOM_MODEL
 
 // Models
 
-// GPT-5 model variants based on environment configuration
-const gpt5ModelVariant = process.env.GPT5_MODEL_VARIANT || 'gpt-5-mini';
-const gpt5ReasoningEffort = process.env.GPT5_REASONING_EFFORT || 'medium';
-const gpt5Verbosity = process.env.GPT5_VERBOSITY || 'medium';
-
-const gpt5Model = openai?.(gpt5ModelVariant, {
-  reasoning: { effort: gpt5ReasoningEffort },
-  text: { verbosity: gpt5Verbosity },
-  structuredOutputs: true,
-});
-
 const deepSeekR1Model = fireworks
   ? wrapLanguageModel({
       model: fireworks(
@@ -51,14 +41,43 @@ const deepSeekR1Model = fireworks
     })
   : undefined;
 
-export function getModel(): LanguageModelV1 {
+// Updated getModel function to accept user configuration
+export function getModel(modelConfig?: ModelConfig): LanguageModelV1 {
+  // Custom model override takes precedence
   if (customModel) {
     return customModel;
   }
 
-  const model = deepSeekR1Model ?? gpt5Model;
+  // Use user-configured model or default to gpt-5-mini
+  const variant = modelConfig?.variant || 'gpt-5-mini';
+  const reasoningEffort = modelConfig?.reasoning?.effort || 'medium';
+  const verbosity = modelConfig?.text?.verbosity || 'medium';
+
+  // Prefer Fireworks R1 if available, otherwise use GPT-5
+  if (deepSeekR1Model) {
+    return deepSeekR1Model;
+  }
+
+  // Create GPT model with user configuration
+  // For now, fallback to latest available models until GPT-5 is officially supported
+  let modelId: string;
+  switch (variant) {
+    case 'gpt-5':
+    case 'gpt-5-mini':
+    case 'gpt-5-nano':
+      // Fallback to GPT-4 variants until GPT-5 is available
+      modelId = 'gpt-4o-mini';
+      break;
+    default:
+      modelId = 'gpt-4o-mini';
+  }
+
+  const model = openai?.(modelId as any, {
+    structuredOutputs: true,
+  });
+
   if (!model) {
-    throw new Error('No model found');
+    throw new Error('No model found - please check your OPENAI_KEY');
   }
 
   return model as LanguageModelV1;

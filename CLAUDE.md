@@ -30,12 +30,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working inside 
 - Toggle `BYPASS_DEEP_RESEARCH=true` during local development to skip external calls and rely on mock outputs for fast iteration.
 
 ## Output Schema
-Structured JSON written to the contacts database must include:
+Structured JSON written to the contacts database must mirror the contacts table in `docs/emailflow-db-schemas.md`:
 - `name`, `email`, `company`, `position`, `department`
-- `city`, `state_province`, `country`, `time_zone`
-- `number`, `priority`, `signal`, `signal_level`, `compliment`
-- `industry`, `tags`, `links`, `source` (set to `"deep-research"`)
-Reference `example_output.md` for concrete formatting and ensure commas separate multi-value fields (`tags`, `links`).
+- `city`, `stateProvince`, `country`, `timeZone`
+- `number`, `priority`, `signal`, `signalLevel`, `compliment`
+- `industry`, `tags` (array of strings), `links` (string), `source` (set to `"deep-research"`)
+Reference `example_output.md` for concrete formatting. Use an array for `tags`; for `links`, use a string (comma-separated if multiple URLs).
 
 ## Auditing & Reporting Expectations
 - Document every correction made during auditing inside the final report payload.
@@ -61,4 +61,3 @@ Reference `example_output.md` for concrete formatting and ensure commas separate
 
 ### System-wide Changes
 - Analyse the full impact of refactors before coding; confirm alignment with pipeline requirements described above.
-

@@ -58,24 +58,24 @@ The system now reads configuration from `RESEARCH_INPUT.json` instead of CLI pro
 5. **Email Delivery** - Research report delivered via Resend email after completion
 
 ### Contact Database Schema
-Each discovered contact must include these fields:
+Treat `docs/emailflow-db-schemas.md` as the source of truth. Each discovered contact should map to these fields:
 - `name` - Contact's full name
-- `email` - Contact's email (must be unique)
+- `email` - Contact's email
 - `company` - Company name
-- `tags` - Comma-separated tags (e.g., "new york,private school")
+- `tags` - Array of strings (e.g., ["new york", "private school"])
 - `position` - Official job title (e.g., Director of Technology, Principal)
 - `city` - City location of school
-- `state-province` - State or province
+- `stateProvince` - State or province
 - `country` - Country
 - `number` - Phone number with extension if available (leave blank if not found)
-- `time_zone` - Local time zone (e.g., "EST", "PST")
+- `timeZone` - Local time zone (e.g., "America/New_York")
 - `department` - Department or division (leave blank if unclear)
 - `priority` - Decision-maker priority (1 = highest, increasing numbers = lower)
 - `signal` - Type of signal detected (e.g., Funding, Hiring, Article)
-- `signal_level` - Numeric signal strength (1 = highest priority, larger = lower)
+- `signalLevel` - Signal strength as text
 - `compliment` - One-sentence compliment referencing the signal
 - `industry` - Contact's industry (e.g., Education)
-- `links` - Comma-separated signal source links
+- `links` - String of URL(s); if multiple, join with commas
 - `source` - Hard-coded as "deep-research"
 
 ### Output Modes
