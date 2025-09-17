@@ -241,9 +241,10 @@ Output Format: ${config.outputFormat || 'contacts_db'}
       modelConfig: config.modelConfig,
     });
 
-    // Append contacts and audit summary to report if available
+    // Append contacts and audit summary only when not bypassing
     let finalReport = report;
-    if (config.outputFormat === 'contacts_db' && contacts.length > 0) {
+    const isBypass = process.env.BYPASS_DEEP_RESEARCH === 'true';
+    if (!isBypass && config.outputFormat === 'contacts_db' && contacts.length > 0) {
       finalReport += `\n\n## Extracted Contacts\n\nFound ${contacts.length} contacts from research.\n\n`;
 
       if (auditSummary) {

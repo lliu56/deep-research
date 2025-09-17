@@ -258,6 +258,19 @@ export async function writeFinalReport({
   visitedUrls: string[];
   modelConfig?: ModelConfig;
 }) {
+  // In bypass mode, mirror the example report exactly
+  if (process.env.BYPASS_DEEP_RESEARCH === 'true') {
+    try {
+      const examplePath = path.join(process.cwd(), 'example_report.md');
+      const example = await fs.readFile(examplePath, 'utf-8');
+      return example;
+    } catch (error) {
+      log(
+        '[Report][Bypass][Warn] Could not read example_report.md, generating report via model',
+      );
+    }
+  }
+
   const learningsString = learnings
     .map(learning => `<learning>\n${learning}\n</learning>`)
     .join('\n');

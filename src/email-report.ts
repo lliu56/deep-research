@@ -1,3 +1,4 @@
+import * as fs from 'fs/promises';
 import { Resend } from 'resend';
 
 import { InsertionResult } from './database';
@@ -299,7 +300,7 @@ export async function sendEmailReport({
   const subject = `Deep Research Report — ${stats.query} (${stats.totalContacts} contacts)`;
 
   try {
-    const result = await withRetry(
+    const { data, error } = await withRetry(
       async () => {
         return await resend.emails.send({
           from,
@@ -312,10 +313,13 @@ export async function sendEmailReport({
       'email send',
     );
 
-    log(
-      `[Email] Email report sent successfully to ${to}, message ID: ${result.data?.id}`,
-    );
-    return { success: true, messageId: result.data?.id };
+    if (error || !data?.id) {
+      const errMsg = error?.message || 'No message ID returned by Resend';
+      throw new Error(errMsg);
+    }
+
+    log(`[Email] Email report sent successfully to ${to}, message ID: ${data.id}`);
+    return { success: true, messageId: data.id };
   } catch (error) {
     const errorMessage = `Failed to send email report: ${(error as Error).message}`;
     log(`[Email][Error] ${errorMessage}`);
@@ -358,21 +362,42 @@ export async function generateAndSendReport({
       runId,
     };
 
-    // Generate HTML report
-    log('[Email] Generating HTML email report...');
-    const htmlReport = generateHtmlReport({
-      stats,
-      contacts,
-      corrections,
-      auditSummary,
-    });
+    // Generate or load HTML report
+    const isBypass = process.env.BYPASS_DEEP_RESEARCH === 'true';
+    let htmlReport: string;
+
+    if (isBypass) {
+      log('[Email][Bypass] Using mock HTML report from test/mock-report.html');
+      try {
+        htmlReport = await fs.readFile('test/mock-report.html', 'utf-8');
+      } catch (error) {
+        log(
+          '[Email][Bypass][Warn] Could not read test/mock-report.html, falling back to generated HTML',
+        );
+        htmlReport = generateHtmlReport({
+          stats,
+          contacts,
+          corrections,
+          auditSummary,
+        });
+      }
+    } else {
+      log('[Email] Generating HTML email report...');
+      htmlReport = generateHtmlReport({
+        stats,
+        contacts,
+        corrections,
+        auditSummary,
+      });
+    }
 
     // Send email report
     log('[Email] Sending email report...');
     const emailResult = await sendEmailReport({
       htmlReport,
       stats,
-      recipientEmail,
+      recipientEmail:
+        isBypass ? 'team@goai.school' : recipientEmail,
       fromEmail,
     });
 
