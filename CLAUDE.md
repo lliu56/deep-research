@@ -35,7 +35,7 @@ Structured JSON written to the contacts database must mirror the contacts table 
 - `city`, `stateProvince`, `country`, `timeZone`
 - `number`, `priority`, `signal`, `signalLevel`, `compliment`
 - `industry`, `tags` (array of strings), `links` (string), `source` (set to `"deep-research"`)
-Reference `example_output.md` for concrete formatting. Use an array for `tags`; for `links`, use a string (comma-separated if multiple URLs).
+Reference `example_output.md` for concrete formatting. Use an array for `tags`; for `links`, use a string (comma-separated if multiple URLs). Keep `signalLevel` as a string (e.g., '1' through '10').
 
 ## Auditing & Reporting Expectations
 - Document every correction made during auditing inside the final report payload.

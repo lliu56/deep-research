@@ -36,10 +36,15 @@ async function verifyContact({
 
   // Create a targeted search query for this specific contact
   const verificationQuery = `
-Verify information for ${contact.name} at ${contact.company} in ${contact.position} role.
-Search for: ${contact.name} ${contact.company} ${contact.position}
+Verify information for ${contact.name} at ${contact.company} in ${contact.position} role, with ${contact.email} and ${contact.number}.
+Search for: ${contact.name} ${contact.company} ${contact.position} ${contact.email} ${contact.number},
 Confirm: email, position, department, location, recent activity
 Context: ${originalQuery}
+Strict Rules:
+  - Back everything you say with actual sources.
+  - There are heavy penalties for information that are made up/don't come from an actual source
+  - If you are not sure about the factual correctness of a information, leave it blank. 
+
 `;
 
   try {
@@ -111,7 +116,9 @@ Context: ${originalQuery}
       email: verifiedContact.email || contact.email,
     };
 
-    log(`[Audit] Verified ${contact.name}: ${corrections.length} corrections found`);
+    log(
+      `[Audit] Verified ${contact.name}: ${corrections.length} corrections found`,
+    );
     return { verifiedContact: finalContact, corrections };
   } catch (error) {
     log(`[Audit][Error] Error verifying contact ${contact.name}:`, error);
@@ -203,7 +210,9 @@ export async function auditContacts({
 
   const verifiedContacts = Array.from(verifiedContactsMap.values());
 
-  log(`[Audit] Audit completed: ${allCorrections.length} total corrections made`);
+  log(
+    `[Audit] Audit completed: ${allCorrections.length} total corrections made`,
+  );
 
   return {
     verifiedContacts,
@@ -254,9 +263,9 @@ Corrections by field: ${JSON.stringify(correctionsByField, null, 2)}
 
 Recent corrections examples:
 ${corrections
-  .slice(0, 5)
-  .map(c => `- ${c.field}: "${c.before}" → "${c.after}" (${c.reason})`)
-  .join('\n')}
+        .slice(0, 5)
+        .map(c => `- ${c.field}: "${c.before}" → "${c.after}" (${c.reason})`)
+        .join('\n')}
 
 Create a brief summary highlighting data quality, main issues found, and confidence level.`,
     schema: z.object({

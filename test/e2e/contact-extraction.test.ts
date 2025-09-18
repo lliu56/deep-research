@@ -206,13 +206,13 @@ describe('Contact Extraction E2E', () => {
       expect(contact).toHaveProperty('company');
       expect(contact).toHaveProperty('position');
       expect(contact).toHaveProperty('city');
-      expect(contact).toHaveProperty('state-province');
+      expect(contact).toHaveProperty('stateProvince');
       expect(contact).toHaveProperty('country');
-      expect(contact).toHaveProperty('time zone');
+      expect(contact).toHaveProperty('timeZone');
       expect(contact).toHaveProperty('industry');
       expect(contact).toHaveProperty('priority');
       expect(contact).toHaveProperty('signal');
-      expect(contact).toHaveProperty('signal_level');
+      expect(contact).toHaveProperty('signalLevel');
       expect(contact).toHaveProperty('compliment');
       expect(contact).toHaveProperty('tags');
       expect(contact).toHaveProperty('links');
@@ -222,7 +222,8 @@ describe('Contact Extraction E2E', () => {
       expect(typeof contact.name).toBe('string');
       expect(typeof contact.email).toBe('string');
       expect(typeof contact.priority).toBe('number');
-      expect(typeof contact.signal_level).toBe('number');
+      expect(typeof contact.signalLevel).toBe('string');
+      expect(Array.isArray(contact.tags)).toBe(true);
       expect(contact.source).toBe('deep-research');
     }
   });

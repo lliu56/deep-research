@@ -73,7 +73,10 @@ async function run() {
   console.log('[Config] Using model:', getModel(config.modelConfig).modelId);
   console.log('[Config] Configuration loaded from RESEARCH_INPUT.json');
   console.log('[Config] Query:', config.query);
-  console.log('[Config] BYPASS_DEEP_RESEARCH:', process.env.BYPASS_DEEP_RESEARCH);
+  console.log(
+    '[Config] BYPASS_DEEP_RESEARCH:',
+    process.env.BYPASS_DEEP_RESEARCH,
+  );
 
   const breadth = config.breadth || 4;
   const depth = config.depth || 2;
@@ -90,7 +93,9 @@ async function run() {
       modelConfig: config.modelConfig,
     });
 
-    log('\n[Planning] Generated follow-up questions for enhanced research context:');
+    log(
+      '\n[Planning] Generated follow-up questions for enhanced research context:',
+    );
     followUpQuestions.forEach((q: string, i: number) => {
       log(`${i + 1}. ${q}`);
     });
@@ -116,7 +121,9 @@ Output Format: ${config.outputFormat || 'contacts_db'}
   });
 
   log(`\n\n[Research] Learnings:\n\n${learnings.join('\n')}`);
-  log(`\n\n[Research] Visited URLs (${visitedUrls.length}):\n\n${visitedUrls.join('\n')}`);
+  log(
+    `\n\n[Research] Visited URLs (${visitedUrls.length}):\n\n${visitedUrls.join('\n')}`,
+  );
 
   // Generate contacts if outputFormat is contacts_db
   let contacts: any[] = [];
@@ -154,7 +161,9 @@ Output Format: ${config.outputFormat || 'contacts_db'}
         modelConfig: config.modelConfig,
       });
 
-      log(`\n[Audit] Auditing completed: ${corrections.length} corrections made`);
+      log(
+        `\n[Audit] Auditing completed: ${corrections.length} corrections made`,
+      );
 
       // Insert contacts into database
       let dbResult;
@@ -165,7 +174,10 @@ Output Format: ${config.outputFormat || 'contacts_db'}
         );
 
         if (dbResult.errors.length > 0) {
-          console.warn('[Database][Warn] Some contacts could not be inserted:', dbResult.errors);
+          console.warn(
+            '[Database][Warn] Some contacts could not be inserted:',
+            dbResult.errors,
+          );
         }
 
         // Send email report after successful database insertion
@@ -181,7 +193,10 @@ Output Format: ${config.outputFormat || 'contacts_db'}
         if (emailResult.success) {
           log('[Email] Email report sent successfully');
         } else {
-          console.warn('[Email][Error] Failed to send email report:', emailResult.error);
+          console.warn(
+            '[Email][Error] Failed to send email report:',
+            emailResult.error,
+          );
         }
       } catch (dbError) {
         console.error('[Database][Error] Database insertion failed:', dbError);
@@ -189,7 +204,9 @@ Output Format: ${config.outputFormat || 'contacts_db'}
 
         // Still try to send email report even if DB insertion failed
         if (contacts.length > 0) {
-          log('\n[Email] Attempting to send email report despite DB failure...');
+          log(
+            '\n[Email] Attempting to send email report despite DB failure...',
+          );
           const emailResult = await generateAndSendReport({
             query: config.query,
             contacts,
@@ -206,7 +223,10 @@ Output Format: ${config.outputFormat || 'contacts_db'}
           if (emailResult.success) {
             log('[Email] Email report sent successfully despite DB failure');
           } else {
-            console.warn('[Email][Error] Failed to send email report:', emailResult.error);
+            console.warn(
+              '[Email][Error] Failed to send email report:',
+              emailResult.error,
+            );
           }
         }
       }
@@ -244,7 +264,11 @@ Output Format: ${config.outputFormat || 'contacts_db'}
     // Append contacts and audit summary only when not bypassing
     let finalReport = report;
     const isBypass = process.env.BYPASS_DEEP_RESEARCH === 'true';
-    if (!isBypass && config.outputFormat === 'contacts_db' && contacts.length > 0) {
+    if (
+      !isBypass &&
+      config.outputFormat === 'contacts_db' &&
+      contacts.length > 0
+    ) {
       finalReport += `\n\n## Extracted Contacts\n\nFound ${contacts.length} contacts from research.\n\n`;
 
       if (auditSummary) {
@@ -267,7 +291,9 @@ Output Format: ${config.outputFormat || 'contacts_db'}
     console.log('\n[Output] Answer has been saved to answer.md');
   }
 
-  console.log('\n[Cleanup] Automated research pipeline completed successfully.');
+  console.log(
+    '\n[Cleanup] Automated research pipeline completed successfully.',
+  );
 
   // Close database connection pool
   await closePool();

@@ -79,7 +79,10 @@ async function generateSerpQueries({
         .describe(`List of SERP queries, max of ${numQueries}`),
     }),
   });
-  log(`[Research] Created ${res.object.queries.length} queries`, res.object.queries);
+  log(
+    `[Research] Created ${res.object.queries.length} queries`,
+    res.object.queries,
+  );
 
   return res.object.queries.slice(0, numQueries);
 }
@@ -142,31 +145,35 @@ export async function generateContactsFromLearnings({
 }): Promise<Contact[]> {
   // Check for bypass mode
   if (process.env.BYPASS_DEEP_RESEARCH === 'true') {
-    log('\n[Contacts][Bypass] Using mock contacts from test/mock-output.json\n');
+    log(
+      '\n[Contacts][Bypass] Using mock contacts from test/mock-output.json\n',
+    );
 
     try {
       const mockDataPath = path.join(process.cwd(), 'test', 'mock-output.json');
       const mockData = await fs.readFile(mockDataPath, 'utf-8');
       return JSON.parse(mockData) as Contact[];
     } catch (error) {
-      log('[Contacts][Bypass] Warning: Could not load mock data, returning sample contacts');
+      log(
+        '[Contacts][Bypass] Warning: Could not load mock data, returning sample contacts',
+      );
       // Return sample contacts if mock file not found
       return [
         {
           name: 'Sample Contact',
           email: 'sample@test.com',
           company: 'Test Company',
-          tags: 'test,mock',
+          tags: ['test', 'mock'],
           position: 'Test Position',
           city: 'New York',
-          'state-province': 'NY',
+          stateProvince: 'NY',
           country: 'USA',
           number: '555-0100',
-          'time zone': 'America/New_York',
+          timeZone: 'America/New_York',
           department: 'Technology',
           priority: 1,
           signal: 'Testing',
-          signal_level: 1,
+          signalLevel: '1',
           compliment: 'Test compliment',
           industry: 'Education',
           links: 'https://test.com',
@@ -204,11 +211,11 @@ For each person identified, extract or infer the following information:
 - City, state/province, country (infer if not explicit)
 - Industry type
 - Priority level (1-10 based on seniority/relevance)
-- Signal strength (1-10 based on hiring activity/relevance)
+- Signal level (string; prefer values '1' through '10' based on hiring activity/relevance)
 - Professional compliment (positive note about their role/achievements)
 - Time zone (infer from location)
-- Tags (comma-separated, relevant keywords)
-- Links (comma-separated, any mentioned URLs or social profiles)
+- Tags (array of relevant keywords)
+- Links (comma-separated string of any mentioned URLs or social profiles)
 - Phone number (if available)
 
 Source all contacts as 'deep-research'.
@@ -226,15 +233,15 @@ ${learningsString}
           position: z.string(),
           department: z.string().optional(),
           city: z.string(),
-          'state-province': z.string(),
+          stateProvince: z.string(),
           country: z.string(),
-          'time zone': z.string(),
+          timeZone: z.string(),
           industry: z.string(),
           priority: z.number().min(1).max(10),
           signal: z.string(),
-          signal_level: z.number().min(1).max(10),
+          signalLevel: z.string(),
           compliment: z.string(),
-          tags: z.string(),
+          tags: z.array(z.string()),
           links: z.string(),
           number: z.string().optional(),
           source: z.literal('deep-research'),
@@ -243,8 +250,39 @@ ${learningsString}
     }),
   });
 
-  log(`[Contacts] Extracted ${res.object.contacts.length} contacts from learnings`);
-  return res.object.contacts as Contact[];
+  const contactsRaw = res.object.contacts as Array<
+    Contact & {
+      tags: string[] | string;
+      signalLevel: string | number;
+    }
+  >;
+
+  const normalizedContacts: Contact[] = contactsRaw.map(contact => {
+    const tagsArray = Array.isArray(contact.tags)
+      ? contact.tags.map(tag => tag.trim()).filter(Boolean)
+      : typeof contact.tags === 'string'
+        ? contact.tags
+            .split(',')
+            .map(tag => tag.trim())
+            .filter(Boolean)
+        : [];
+
+    return {
+      ...contact,
+      tags: tagsArray,
+      signalLevel:
+        typeof contact.signalLevel === 'number'
+          ? String(contact.signalLevel)
+          : contact.signalLevel,
+      number: contact.number || undefined,
+      department: contact.department || undefined,
+    } satisfies Contact;
+  });
+
+  log(
+    `[Contacts] Extracted ${normalizedContacts.length} contacts from learnings`,
+  );
+  return normalizedContacts;
 }
 
 export async function writeFinalReport({
@@ -451,9 +489,15 @@ export async function deepResearch({
           }
         } catch (e: any) {
           if (e.message && e.message.includes('Timeout')) {
-            log(`[Research][Error] Timeout running query: ${serpQuery.query}: `, e);
+            log(
+              `[Research][Error] Timeout running query: ${serpQuery.query}: `,
+              e,
+            );
           } else {
-            log(`[Research][Error] Failed running query: ${serpQuery.query}: `, e);
+            log(
+              `[Research][Error] Failed running query: ${serpQuery.query}: `,
+              e,
+            );
           }
           return {
             learnings: [],

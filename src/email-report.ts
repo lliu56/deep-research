@@ -62,16 +62,16 @@ export function generateHtmlReport({
             <li><strong>company:</strong> ${contact.company}</li>
             <li><strong>position:</strong> ${contact.position}</li>
             <li><strong>city:</strong> ${contact.city}</li>
-            <li><strong>state-province:</strong> ${contact.stateProvince}</li>
+            <li><strong>stateProvince:</strong> ${contact.stateProvince}</li>
             <li><strong>country:</strong> ${contact.country}</li>
             <li><strong>industry:</strong> ${contact.industry}</li>
             <li><strong>priority:</strong> ${contact.priority}</li>
             <li><strong>signal:</strong> ${contact.signal}</li>
-            <li><strong>signal_level:</strong> ${contact.signalLevel}</li>
+            <li><strong>signalLevel:</strong> ${contact.signalLevel}</li>
             <li><strong>tags:</strong> ${tagsDisplay}</li>
             ${contact.department ? `<li><strong>department:</strong> ${contact.department}</li>` : ''}
             ${contact.number ? `<li><strong>number:</strong> ${contact.number}</li>` : ''}
-            ${contact.timeZone ? `<li><strong>time zone:</strong> ${contact.timeZone}</li>` : ''}
+            ${contact.timeZone ? `<li><strong>timeZone:</strong> ${contact.timeZone}</li>` : ''}
             <li><strong>links:</strong> ${contact.links ? `<a href="${contact.links}">${contact.links}</a>` : 'N/A'}</li>
             <li><strong>source:</strong> ${contact.source}</li>
         </ul>
@@ -318,7 +318,9 @@ export async function sendEmailReport({
       throw new Error(errMsg);
     }
 
-    log(`[Email] Email report sent successfully to ${to}, message ID: ${data.id}`);
+    log(
+      `[Email] Email report sent successfully to ${to}, message ID: ${data.id}`,
+    );
     return { success: true, messageId: data.id };
   } catch (error) {
     const errorMessage = `Failed to send email report: ${(error as Error).message}`;
@@ -396,8 +398,7 @@ export async function generateAndSendReport({
     const emailResult = await sendEmailReport({
       htmlReport,
       stats,
-      recipientEmail:
-        isBypass ? 'team@goai.school' : recipientEmail,
+      recipientEmail: isBypass ? 'team@goai.school' : recipientEmail,
       fromEmail,
     });
 
