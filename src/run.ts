@@ -77,6 +77,7 @@ async function run() {
     '[Config] BYPASS_DEEP_RESEARCH:',
     process.env.BYPASS_DEEP_RESEARCH,
   );
+  console.log('[Config] BYPASS_UPLOAD:', process.env.BYPASS_UPLOAD);
 
   const breadth = config.breadth || 4;
   const depth = config.depth || 2;
@@ -167,66 +168,83 @@ Output Format: ${config.outputFormat || 'contacts_db'}
 
       // Insert contacts into database
       let dbResult;
-      try {
-        dbResult = await insertContacts(contacts);
+      if (process.env.BYPASS_UPLOAD === 'true') {
         log(
-          `\n[Database] Database insertion: ${dbResult.inserted} inserted, ${dbResult.updated} updated, ${dbResult.rejected} rejected`,
+          '\n[Database][Bypass] BYPASS_UPLOAD=true - Skipping database insertion\n',
         );
-
-        if (dbResult.errors.length > 0) {
-          console.warn(
-            '[Database][Warn] Some contacts could not be inserted:',
-            dbResult.errors,
-          );
-        }
-
-        // Send email report after successful database insertion
-        log('\n[Email] Generating and sending email report...');
-        const emailResult = await generateAndSendReport({
-          query: config.query,
-          contacts,
-          corrections,
-          insertionResult: dbResult,
-          auditSummary,
-        });
-
-        if (emailResult.success) {
-          log('[Email] Email report sent successfully');
-        } else {
-          console.warn(
-            '[Email][Error] Failed to send email report:',
-            emailResult.error,
-          );
-        }
-      } catch (dbError) {
-        console.error('[Database][Error] Database insertion failed:', dbError);
-        console.log('[Database] Falling back to JSON file save...');
-
-        // Still try to send email report even if DB insertion failed
-        if (contacts.length > 0) {
+        dbResult = {
+          inserted: 0,
+          updated: 0,
+          rejected: 0,
+          errors: [
+            'Database upload bypassed via BYPASS_UPLOAD environment variable',
+          ],
+        };
+      } else {
+        try {
+          dbResult = await insertContacts(contacts);
           log(
-            '\n[Email] Attempting to send email report despite DB failure...',
+            `\n[Database] Database insertion: ${dbResult.inserted} inserted, ${dbResult.updated} updated, ${dbResult.rejected} rejected`,
           );
+
+          if (dbResult.errors.length > 0) {
+            console.warn(
+              '[Database][Warn] Some contacts could not be inserted:',
+              dbResult.errors,
+            );
+          }
+
+          // Send email report after successful database insertion
+          log('\n[Email] Generating and sending email report...');
           const emailResult = await generateAndSendReport({
             query: config.query,
             contacts,
             corrections,
-            insertionResult: {
-              inserted: 0,
-              updated: 0,
-              rejected: contacts.length,
-              errors: ['Database insertion failed'],
-            },
+            insertionResult: dbResult,
             auditSummary,
           });
 
           if (emailResult.success) {
-            log('[Email] Email report sent successfully despite DB failure');
+            log('[Email] Email report sent successfully');
           } else {
             console.warn(
               '[Email][Error] Failed to send email report:',
               emailResult.error,
             );
+          }
+        } catch (dbError) {
+          console.error(
+            '[Database][Error] Database insertion failed:',
+            dbError,
+          );
+          console.log('[Database] Falling back to JSON file save...');
+
+          // Still try to send email report even if DB insertion failed
+          if (contacts.length > 0) {
+            log(
+              '\n[Email] Attempting to send email report despite DB failure...',
+            );
+            const emailResult = await generateAndSendReport({
+              query: config.query,
+              contacts,
+              corrections,
+              insertionResult: {
+                inserted: 0,
+                updated: 0,
+                rejected: contacts.length,
+                errors: ['Database insertion failed'],
+              },
+              auditSummary,
+            });
+
+            if (emailResult.success) {
+              log('[Email] Email report sent successfully despite DB failure');
+            } else {
+              console.warn(
+                '[Email][Error] Failed to send email report:',
+                emailResult.error,
+              );
+            }
           }
         }
       }

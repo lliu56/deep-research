@@ -18,5 +18,4 @@ export const systemPrompt = () => {
   - It's okay to leave fields blank if you're unsure or if you can't find the info, Except name.
   - You your time and don't jump to conclusions
   `;
-
 };

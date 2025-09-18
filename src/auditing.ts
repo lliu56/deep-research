@@ -263,9 +263,9 @@ Corrections by field: ${JSON.stringify(correctionsByField, null, 2)}
 
 Recent corrections examples:
 ${corrections
-        .slice(0, 5)
-        .map(c => `- ${c.field}: "${c.before}" → "${c.after}" (${c.reason})`)
-        .join('\n')}
+  .slice(0, 5)
+  .map(c => `- ${c.field}: "${c.before}" → "${c.after}" (${c.reason})`)
+  .join('\n')}
 
 Create a brief summary highlighting data quality, main issues found, and confidence level.`,
     schema: z.object({

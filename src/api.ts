@@ -176,9 +176,11 @@ app.post('/api/research-contacts', async (req: Request, res: Response) => {
       log(`\nAudit completed: ${corrections.length} corrections applied\n`);
     }
 
-    // 4. Insert into database (unless skipped for testing)
+    // 4. Insert into database (unless skipped for testing or via BYPASS_UPLOAD)
     let dbResults = { inserted: 0, updated: 0, rejected: 0, errors: [] };
-    if (!skipDatabase && verifiedContacts.length > 0) {
+    const shouldSkipDatabase =
+      skipDatabase || process.env.BYPASS_UPLOAD === 'true';
+    if (!shouldSkipDatabase && verifiedContacts.length > 0) {
       log('\nInserting contacts into database...\n');
       dbResults = await insertContacts(verifiedContacts);
 
@@ -193,12 +195,16 @@ app.post('/api/research-contacts', async (req: Request, res: Response) => {
       log(
         `\nDatabase insertion completed: ${dbResults.inserted} inserted, ${dbResults.updated} updated, ${dbResults.rejected} rejected\n`,
       );
-    } else if (skipDatabase) {
-      log('\nDatabase insertion skipped per request\n');
+    } else if (shouldSkipDatabase) {
+      const reason =
+        process.env.BYPASS_UPLOAD === 'true'
+          ? 'BYPASS_UPLOAD environment variable'
+          : 'request parameter';
+      log(`\nDatabase insertion skipped per ${reason}\n`);
     }
 
     // 5. Send email report if requested (Phase 5 integration point)
-    if (sendEmail && !skipDatabase) {
+    if (sendEmail && !shouldSkipDatabase) {
       // TODO: Call sendEmailReport() when Phase 5 is complete
       log('Email report requested but not yet implemented');
     }
